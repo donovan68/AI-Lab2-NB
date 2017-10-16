@@ -57,6 +57,50 @@ void normalize_6(double* x)
 		x[i] = x[i] / sum;
 	}
 }
+double mean(double* data, int size)
+{
+	double res = 0;
+	for (int i = 0; i < size; i++)
+	{
+		res += data[i];
+	}
+	res = res / size;
+	return res;
+}
+double variance(double* data, int size)
+{
+	double m = mean(data, size);
+	double res = 0;
+	for (int i = 0; i < size; i++)
+	{
+		res += pow(data[i] - m, 2);
+	}
+	return res / size;
+}
+double Maximum(double* data, int size)
+{
+	double max = data[0];
+	for (int i = 1; i < size; i++)
+	{
+		if (data[i] > max)
+		{
+			max = data[i];
+		}
+	}
+	return max;
+}
+double Minimum(double* data, int size)
+{
+	double min = data[0];
+	for (int i = 1; i < size; i++)
+	{
+		if (data[i] < min)
+		{
+			min = data[i];
+		}
+	}
+	return min;
+}
 
 class trainRow
 {
@@ -166,6 +210,7 @@ void trainCase::get_words(const string &filename)
 	ifstream fin(filename.c_str());
 	string s;
 	getline(fin, s);//去掉说明 
+	vector<string> wordsVC_emotion[6];//不重复记录一个感情的单词
 	while (getline(fin, s))
 	{
 		int wordCnt = 0;
@@ -186,7 +231,11 @@ void trainCase::get_words(const string &filename)
 			if (find(wordsVC.begin(), wordsVC.end(), word) == wordsVC.end())//从未出现过的单词 
 			{
 				wordsVC.push_back(word);//记录到vector里
-				emotion_word_count_unique[currEmotion]++;
+			}
+			
+			if (find(wordsVC_emotion[currEmotion].begin(), wordsVC_emotion[currEmotion].end(), word) == wordsVC_emotion[currEmotion].end())
+			{
+				wordsVC_emotion[currEmotion].push_back(word);
 			}
 		}
 		TR->number_of_words = wordCnt;
@@ -197,6 +246,10 @@ void trainCase::get_words(const string &filename)
 	}
 	dictSize = wordsVC.size();
 	rowCnt = matrix.size();
+	for (int i = 0; i < 6; i++)
+	{
+		emotion_word_count_unique[i] = wordsVC_emotion[i].size();
+	}
 }
 void trainCase::write_matrix(const string &filename)
 {
@@ -270,13 +323,18 @@ int trainCase::count_multi(string &word, int emotion)
 }
 void operator<<(ostream& os, const trainCase& TC)
 {
+	for (int j = 0; j < TC.dictSize; j++)
+	{
+		os << TC.wordsVC[j] << ' ';
+	}
+	os << endl;
 	for (int i = 0; i < TC.rowCnt; i++)
 	{
 		for (int j = 0; j < TC.dictSize; j++)
 		{
 			os << TC.matrix[i]->data[j] << ' ';
 		}
-		os << endl;
+		//os << endl;
 		os << EMOTION[TC.matrix[i]->emotion];
 		os << endl;
 	}
@@ -292,6 +350,11 @@ void operator<<(ostream& os, const trainCase& TC)
 		os << TC.emotion_word_count_unique[i] << '\t';
 	}
 	os << endl;
+	for (int i = 0; i < 6; i++)
+	{
+		os << TC.emotion_word_count[i] << '\t';
+	}
+	os << endl;
 }
 
 class testCase
@@ -303,6 +366,8 @@ public:
 	testCase(const string &words, trainCase &TC, int model);//0 for bernoulli, 1 for multinomial
 	testCase(const testCase& TC);
 	~testCase();
+	void score_normalize(double* x);
+	void sacling_normalize(double* x);
 	int classify();
 	void print();
 };
@@ -326,9 +391,13 @@ testCase::testCase(const testCase& TC)
 testCase::testCase(const string &words, trainCase &TC, int model)
 {
 	emotion_posibility = new double[6];
+	double emotion_posibility_de[6];//分母
+	double emotion_posibility_nu[6];//分子
 	for (int i = 0; i < 6; i++)
 	{
 		emotion_posibility[i] = 1;
+		emotion_posibility_de[i] = 1;
+		emotion_posibility_nu[i] = 1;
 	}
 
 	string word;
@@ -340,24 +409,51 @@ testCase::testCase(const string &words, trainCase &TC, int model)
 			if (model == 0)//伯努利模型
 			{
 				int cnt = TC.count_Bern(word, i);
-				emotion_posibility[i] *= 1.0*(cnt + 1.0) / (TC.emotion_row_count[i] + 2.0);
+				emotion_posibility_nu[i] *= cnt + 1.0;
+				emotion_posibility_de[i] *= TC.emotion_row_count[i] + 2.0;
 			}
 			else //词袋模型
 			{
 				int cnt = TC.count_multi(word, i);
-				emotion_posibility[i] *= 1.0*(cnt + 1.0) / (TC.emotion_word_count_unique[i] + TC.emotion_word_count[i]);
+				emotion_posibility_nu[i] *= cnt + 1.0;
+				emotion_posibility_de[i] *= TC.emotion_word_count_unique[i] + TC.emotion_word_count[i];
 			}
 		}
+	}
 
-		for (int i = 0; i < 6; i++)
-		{
-			emotion_posibility[i] *= 1.0*TC.emotion_row_count[i] / TC.rowCnt;
-		}
+	score_normalize(emotion_posibility_nu);
+	score_normalize(emotion_posibility_de);
+	for (int i = 0; i < 6; i++)
+	{
+		emotion_posibility_nu[i] *= 1.0*TC.emotion_row_count[i];
+		emotion_posibility_de[i] *= TC.rowCnt;
+		emotion_posibility[i] = emotion_posibility_nu[i] / emotion_posibility_de[i];
 	}
 }
 testCase::~testCase()
 {
 	delete[] emotion_posibility;
+}
+void testCase::score_normalize(double* x)
+{
+	//standard score
+	double m = mean(x, 6);
+	double v = variance(x, 6);
+
+	for (int i = 0; i < 6; i++)
+	{
+		x[i] = abs(x[i] - m) / sqrt(v);
+	}
+}
+void testCase::sacling_normalize(double* x)
+{
+	double min = Minimum(x, 6);
+	double max = Maximum(x, 6);
+
+	for (int i = 0; i < 6; i++)
+	{
+		x[i] = (x[i] - min) / (max - min);
+	}
 }
 int testCase::classify()
 {
@@ -406,24 +502,50 @@ double validHandle(string &valid_file_name, trainCase &TC, int model)
 		all_cnt++;
 		
 		//cout << emotion_pre << endl;
-		testcase.print();
+		//testcase.print();
 		//system("pause");
+		cout << emotion_pre << endl;
 	}
 	return 1.0*right_cnt / all_cnt;
+}
+void testHandle(ostream &os, string &test_file_name, trainCase &TC, int model)
+{
+	int right_cnt = 0, all_cnt = 0;
+	ifstream fin(test_file_name);
+	string s;
+	getline(fin, s);//去掉说明
+	while (getline(fin, s))
+	{
+		string word, words, emotion_pre;
+		istringstream iss(s);
+		getline(iss, words, ',');
+		//cout << words << endl;//debug
+
+		testCase testcase(words, TC, model);
+		emotion_pre = EMOTION[testcase.classify()];
+		
+		//cout << emotion_pre << endl;
+		testcase.print();
+		//system("pause");
+		os << emotion_pre << endl;
+	}
 }
 int main()
 {
 	string train_file_name = "train_set.csv";
 	string valid_file_name = "validation_set.csv";
+	string test_file_name = "test_set_try.csv";
 	
 	trainCase traincase(train_file_name);
 
-	//ofstream try_fout("try_train_matrix.txt");//debug
-	//try_fout << traincase;//debug
+	ofstream try_fout("try_train_matrix.txt");//debug
+	try_fout << traincase;//debug
 
-	int model = 0;
+	int model = 1;
 	double correction = validHandle(valid_file_name, traincase, model);
 	cout << correction << endl;
+
+	//testHandle(cout, test_file_name, traincase, model);
 
 	system("pause");
     return 0;
