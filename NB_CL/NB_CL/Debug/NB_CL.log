@@ -1,5 +1,5 @@
 ﻿  main.cpp
 c:\users\61915\source\repos\ai-lab2-nb\ai-lab2-nb\nb_cl\nb_cl\main.cpp : warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
-c:\users\61915\source\repos\ai-lab2-nb\ai-lab2-nb\nb_cl\nb_cl\main.cpp(199): warning C4018: “<”: 有符号/无符号不匹配
+c:\users\61915\source\repos\ai-lab2-nb\ai-lab2-nb\nb_cl\nb_cl\main.cpp(200): warning C4018: “<”: 有符号/无符号不匹配
   NB_CL.vcxproj -> C:\Users\61915\source\repos\AI-Lab2-NB\AI-Lab2-NB\NB_CL\Debug\NB_CL.exe
   NB_CL.vcxproj -> C:\Users\61915\source\repos\AI-Lab2-NB\AI-Lab2-NB\NB_CL\Debug\NB_CL.pdb (Partial PDB)
