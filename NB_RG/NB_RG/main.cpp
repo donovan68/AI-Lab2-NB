@@ -9,7 +9,7 @@
 #include <cstring>
 #include <sstream>
 #include <vector>
-#include <stack>
+#include <queue>
 #include <map>
 #include <algorithm>
 #include <cmath>
@@ -37,15 +37,7 @@ void normalize_6(double* x)
 		x[i] = x[i] / sum;
 	}
 }
-double square_sum(double* data, int size)
-{
-	double res = 0;
-	for (int i = 0; i < size; i++)
-	{
-		res += pow(data[i], 2);
-	}
-	return res / size;
-}
+
 
 class trainRow
 {
@@ -236,18 +228,18 @@ class testCase
 {
 public:
 	double* emotion_posibility;//6个感情的预测概率
-	//vector<string> test_words_vc;//所有词
 	string words;//测试文本
-	int newWords;//出现的词典里没有的新词数,不重复
+	//int newWords;//出现的词典里没有的新词数,不重复
+	queue<int> words_location;//记录所有词在训练集词典的位置，不存在为-1
 
 	testCase();
-	testCase(trainCase& TC, string& words, double lp, int norm_type);
+	testCase(trainCase& TC, string& words, double lp);
 	testCase(const testCase& TC);
 	~testCase();
 
-	void score_normalize(double* x, int size);
-	int test_word_in_trainRow(string& word, trainRow* TR, vector<string> &VC);
-	void newWords_counter(vector<string>& VC);//对于读出的一个词，把其放入newWords或oldWords
+	int test_word_in_trainRow(int location, trainRow* TR, vector<string> &VC);
+	void get_words_location(vector<string> &VC);
+	int newWords_counter(trainRow* TR, vector<string>& VC);//对于读出的一个词，把其放入newWords或oldWords
 	//返回<分子，分母>
 	pair<double, double> row_cal_emotion(vector<string> &VC, trainRow* TR, double lp);
 	friend void operator<< (ostream& os, const testCase& TC);
@@ -264,15 +256,10 @@ testCase::testCase(const testCase& TC)
 		emotion_posibility[i] = TC.emotion_posibility[i];
 	}
 }
-testCase::testCase(trainCase& TC, string& words, double lp, int norm_type)
+testCase::testCase(trainCase& TC, string& words, double lp)
 {
 	this->words = words;
-	//string word;
-	//istringstream iss(words);
-	//while (iss >> word)
-	//{
-	//	test_words_vc.push_back(word);
-	//}
+	get_words_location(TC.wordsVC);
 	emotion_posibility = new double[6];
 	for (int i = 0; i < 6; i++)
 	{
@@ -281,7 +268,6 @@ testCase::testCase(trainCase& TC, string& words, double lp, int norm_type)
 	double nu [630];//对每一行的训练数据算出的分子
 	double de [630];//对每一行的训练数据算出的分母
 
-	newWords_counter(TC.wordsVC);
 	pair<double, double> tmp_pair;
 	for (int i = 0; i < TC.rowCnt; i++)
 	{
@@ -294,17 +280,7 @@ testCase::testCase(trainCase& TC, string& words, double lp, int norm_type)
 	//{
 	//	cout << nu[i] << ' ' << de[i] << endl;
 	//}
-	//归一化
-	//if (norm_type == 0)
-	//{
-	//	score_normalize(nu, TC.rowCnt);
-	//	score_normalize(de, TC.rowCnt);
-	//}
-	//else if (norm_type == 1)
-	//{
-	//	scaling_normalize(nu, TC.rowCnt);
-	//	scaling_normalize(de, TC.rowCnt);
-	//}
+
 	//计算出六个感情
 	for (int i = 0; i < TC.rowCnt; i++)
 	{
@@ -320,19 +296,8 @@ testCase::~testCase()
 {
 	delete[] emotion_posibility;
 }
-void testCase::score_normalize(double* x, int size)
+int testCase::test_word_in_trainRow(int location, trainRow* TR, vector<string> &VC)
 {
-	//standard score
-	double v = square_sum(x, size);
-
-	for (int i = 0; i < size; i++)
-	{
-		x[i] = abs(x[i]) / sqrt(v);
-	}
-}
-int testCase::test_word_in_trainRow(string &word, trainRow* TR, vector<string> &VC)
-{
-	int location = find_word_in_vc(word, VC);
 	if (location == -1)
 	{
 		return 0;
@@ -342,21 +307,32 @@ int testCase::test_word_in_trainRow(string &word, trainRow* TR, vector<string> &
 		return TR->data[location];
 	}
 }
-void testCase::newWords_counter(vector<string> &VC)
+void testCase::get_words_location(vector<string> &VC)
 {
-	vector<string> newWordsVC;
 	string word;
 	istringstream iss(words);
-	//for (vector<string>::iterator it = test_words_vc.begin(); it != test_words_vc.end(); it++)
 	while (iss >> word)
 	{
-		if (find_word_in_vc(word, VC) == 0 && find_word_in_vc(word, newWordsVC) == 0)
+		words_location.push(find_word_in_vc(word, VC));
+	}
+}
+int testCase::newWords_counter(trainRow* TR, vector<string> &VC)
+{
+	int newWords = 0;
+	vector<int> newWordsVC;
+	int it_end = words_location.size();
+	for(int it = 0; it < it_end; it++)
+	{
+		int tmp_loaction = words_location.front();
+		if (test_word_in_trainRow(tmp_loaction,TR,VC) == 0 && find(newWordsVC.begin(),newWordsVC.end(),tmp_loaction) == newWordsVC.end())
 		{
-			newWordsVC.push_back(word);
+			newWordsVC.push_back(tmp_loaction);
 			newWords++;
 		}
+		words_location.pop();
+		words_location.push(tmp_loaction);
 	}
-	//return count_newWords_unique;
+	return newWords;
 }
 pair<double, double> testCase::row_cal_emotion(vector<string> &VC, trainRow* TR, double lp)
 {
@@ -365,14 +341,15 @@ pair<double, double> testCase::row_cal_emotion(vector<string> &VC, trainRow* TR,
 	//int count_newWords_unique = newWords_counter(TR, VC);
 
 	//分母每次乘上去的值=测试文本对于当前训练文本不重复新词个数*lp+训练文本词的不重复个数*lp+训练文本词总数
-	double tmp_de_factor = (newWords + VC.size()) * lp + TR->number_of_words;
-	istringstream iss(words);
-	string word;
-	//for(vector<string>::iterator it = test_words_vc.begin(); it != test_words_vc.end(); it++)
-	while(iss >> word)
+	double tmp_de_factor = (newWords_counter(TR,VC) + TR->count_word_unique) * lp + TR->number_of_words;
+	int it_end = words_location.size();
+	for(int it = 0; it < it_end; it++)
 	{
-		tmp_nu *= test_word_in_trainRow(word, TR, VC) + lp;//词出现的词数+lp
+		int tmp_location = words_location.front();
+		tmp_nu *= test_word_in_trainRow(tmp_location, TR, VC) + lp;//词出现的次数+lp
 		tmp_de *= tmp_de_factor;
+		words_location.pop();
+		words_location.push(tmp_location);
 	}
 	
 	pair<double, double> res(tmp_nu, tmp_de);
@@ -387,7 +364,7 @@ void operator<< (ostream& os, const testCase& TC)
 	os << endl;
 }
 
-void validHandle(ostream &os, string &valid_file_name, trainCase &TC, double lp, int norm_type)
+void validHandle(ostream &os, string &valid_file_name, trainCase &TC, double lp)
 {
 	ifstream fin(valid_file_name);
 	string s;
@@ -397,12 +374,11 @@ void validHandle(ostream &os, string &valid_file_name, trainCase &TC, double lp,
 		string words;
 		istringstream iss(s);
 		getline(iss, words, ',');
-		iss.clear();
-		testCase testcase(TC, words, lp, norm_type);
+		testCase testcase(TC, words, lp);
 		os << testcase;
 	}
 }
-void testHandle(ostream &os, string &test_file_name, trainCase &TC, double lp, int norm_type)
+void testHandle(ostream &os, string &test_file_name, trainCase &TC, double lp)
 {
 	ifstream fin(test_file_name);
 	string s;
@@ -413,7 +389,7 @@ void testHandle(ostream &os, string &test_file_name, trainCase &TC, double lp, i
 		istringstream iss(s);
 		getline(iss, words, ',');//去掉数字
 		getline(iss, words, ',');
-		testCase testcase(TC, words, lp, norm_type);
+		testCase testcase(TC, words, lp);
 		os << testcase;
 	}
 }
@@ -423,26 +399,35 @@ int main()
 	string train_file_name = "train_set.csv";
 	string valid_file_name = "validation_set.csv";
 	string test_file_name = "test_set.csv";
-	string validres_file_name = "valid_res.txt";
+	string validres_file_name = "";
 	string testres_file_name = "test_res.txt";
-	double lp = 0;
-	int norm_type = 0;
+	double lp = 1;
+	int loglp = 0;
 
 	trainCase traincase(train_file_name);
 
 	//ofstream fout_t("train_data.txt");
 	//fout_t << traincase;
 
-	cout << "lp?" << endl;
-	cin >> lp;
-	cout << "normalize type? 0 for stand_score, 1 for feature_scaling" << endl;
-	cin >> norm_type;
+	cout << "log(lp) to ?" << endl;
+	cin >> loglp;
 
-	ofstream f_valid_out(validres_file_name);
-	validHandle(f_valid_out, valid_file_name, traincase, lp, norm_type);
+	for (int i = 0; i < loglp; i++)
+	{
+		stringstream ss;
+		ss << "fv";
+		ss << i;
+		ss << ".txt";
+		ss >> validres_file_name;
+		ofstream f_valid_out(validres_file_name);
+
+		validHandle(f_valid_out, valid_file_name, traincase, lp);
+		cout << "lp = " << lp << " is completed!" << endl;
+		lp = lp / 10;
+	}
 
 	//ofstream f_test_out(testres_file_name);
-	//testHandle(f_test_out, valid_file_name, traincase, lp, norm_type);
+	//testHandle(f_test_out, valid_file_name, traincase, lp);
 
 	system("pause");
     return 0;
