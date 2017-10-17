@@ -1,0 +1,5 @@
+﻿  main.cpp
+c:\users\61915\source\repos\nb_rg\nb_rg\main.cpp : warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
+c:\users\61915\source\repos\nb_rg\nb_rg\main.cpp(139): warning C4018: “<”: 有符号/无符号不匹配
+  NB_RG.vcxproj -> C:\Users\61915\source\repos\NB_RG\Debug\NB_RG.exe
+  NB_RG.vcxproj -> C:\Users\61915\source\repos\NB_RG\Debug\NB_RG.pdb (Partial PDB)
