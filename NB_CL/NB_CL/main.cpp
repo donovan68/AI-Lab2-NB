@@ -32,7 +32,7 @@ int emotion_to_index(const string& emotion)
 	else if (emotion == "joy") { return 3; }
 	else if (emotion == "sad") { return 4; }
 	else if (emotion == "surprise") { return 5; }
-	else return 0;
+	else return 5;
 }
 
 //在 string向量里找出字符串str，返回索引
@@ -374,7 +374,6 @@ public:
 	int classify();
 	void print();
 };
-
 testCase::testCase()
 {
 	emotion_posibility = new double[6];
@@ -428,19 +427,41 @@ testCase::testCase(const string &words, trainCase &TC, int model, double lp)
 					int cnt = TC.count_multi(word, i);
 					emotion_posibility_nu[i] *= (cnt + 1.0*lp);
 					emotion_posibility_de[i] *= (newWords_emotion[i] * lp + TC.emotion_word_count_unique[i] * lp + TC.emotion_word_count[i]);
+					//cout << word << ": " << cnt << endl;//debug
 				}
 			}
 		}
 	}
 
+	//debug
+	//for (int i = 0; i < 6; i++)
+	//{
+	//	//cout << emotion_posibility_nu[i] << ' ' << emotion_posibility_de[i] << endl;
+	//	cout << emotion_posibility_nu[i] / emotion_posibility_de[i] << endl;
+	//}
 	score_normalize(emotion_posibility_nu);
 	score_normalize(emotion_posibility_de);
+	//for (int i = 0; i < 6; i++)
+	//{
+	//	//cout << emotion_posibility_nu[i] << ' ' << emotion_posibility_de[i] << endl;
+	//	cout << emotion_posibility_nu[i] / emotion_posibility_de[i] << endl;
+	//}
 	for (int i = 0; i < 6; i++)
 	{
-		emotion_posibility_nu[i] *= 1.0*TC.emotion_row_count[i];
-		emotion_posibility_de[i] *= 1.0*TC.rowCnt;
-		emotion_posibility[i] = emotion_posibility_nu[i] / emotion_posibility_de[i];
+		emotion_posibility_nu[i] *= 1.0 * TC.emotion_row_count[i];
+		emotion_posibility_de[i] *= 1.0 * TC.rowCnt;
+		emotion_posibility[i] *= emotion_posibility_nu[i] / emotion_posibility_de[i];
 	}
+	//for (int i = 0; i < 6; i++)
+	//{
+	//	emotion_posibility[i] *= emotion_posibility_nu[i] / emotion_posibility_de[i];
+	//}
+	//score_normalize(emotion_posibility);
+	////normalize_6(emotion_posibility);
+	//for (int i = 0; i < 6; i++)
+	//{
+	//	emotion_posibility[i] *= 1.0*TC.emotion_row_count[i]/ TC.rowCnt;		
+	//}
 }
 testCase::~testCase()
 {
@@ -477,7 +498,7 @@ void testCase::score_normalize(double* x)
 
 	for (int i = 0; i < 6; i++)
 	{
-		x[i] = abs(x[i] - m) / sqrt(v);
+		x[i] = (x[i] - m) / sqrt(v) + 1;
 	}
 }
 void testCase::sacling_normalize(double* x)
@@ -496,7 +517,7 @@ int testCase::classify()
 	int max_emotion = 0;
 	for (int i = 0; i < 6; i++)
 	{
-		if (emotion_posibility[i] > max_posibility)
+		if (emotion_posibility[i] - max_posibility > 0.000000000001)
 		{
 			max_posibility = emotion_posibility[i];
 			max_emotion = i;
@@ -520,7 +541,8 @@ void testCase::print()
 
 double validHandle(string &valid_file_name, trainCase &TC, int model, double lp)
 {
-	int right_cnt = 0, all_cnt = 0;
+	int right_cnt = 0;
+	int all_cnt = 0;
 	ifstream fin(valid_file_name);
 	string s;
 	getline(fin, s);//去掉说明
@@ -541,10 +563,14 @@ double validHandle(string &valid_file_name, trainCase &TC, int model, double lp)
 		}
 		all_cnt++;
 
+		//debug
+		//if (emotion_pre != emotion_ans)
+		//{
+		//	cout << emotion_pre << ' ' << emotion_ans << endl;
+		//}
 		//cout << emotion_pre << endl;
 		//testcase.print();
 		//system("pause");
-		//cout << emotion_pre << endl;
 	}
 	return 1.0*right_cnt / all_cnt;
 }
@@ -565,9 +591,9 @@ void testHandle(ostream &os, string &test_file_name, trainCase &TC, int model, d
 		emotion_pre = EMOTION[testcase.classify()];
 
 		//cout << emotion_pre << endl;
-		testcase.print();
-		//system("pause");
-		os << emotion_pre << endl;
+		//testcase.print();
+		system("pause");
+		//os << emotion_pre << endl;
 	}
 }
 int main()
@@ -577,9 +603,6 @@ int main()
 	string test_file_name = "test_set_try.csv";
 
 	trainCase traincase(train_file_name);
-
-	//ofstream try_fout("try_train_matrix.txt");//debug
-	//try_fout << traincase;//debug
 
 	//system("pause");
 
@@ -598,10 +621,14 @@ int main()
 		double correction = validHandle(valid_file_name, traincase, model, lp);
 		cout << lp << ": " << correction << endl;
 		lp += lp_div;
+		//system("pause");
 	}
 	
-
-	//testHandle(cout, test_file_name, traincase, model);
+	//train_file_name = "train_set_try.csv";
+	//trainCase traincase_try(train_file_name);
+	//ofstream try_fout("try_train_matrix.txt");//debug
+	//try_fout << traincase_try;//debug
+	//testHandle(cout, test_file_name, traincase_try, model,0.1);
 
 	system("pause");
 	return 0;
