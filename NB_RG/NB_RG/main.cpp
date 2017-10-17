@@ -46,7 +46,6 @@ public:
 	int dictSize;
 	int* data;
 	double* emotion;//anger,disgust,fear,joy,sad,surprise
-	int count_word_unique;
 
 	trainRow();
 	trainRow(int dictSize);
@@ -57,7 +56,6 @@ trainRow::trainRow()
 {
 	dictSize = 0;
 	number_of_words = 0;
-	count_word_unique = 0;
 	emotion = new double[6];
 	for (int i = 0; i < 6; i++)
 	{
@@ -66,7 +64,6 @@ trainRow::trainRow()
 }
 trainRow::trainRow(int dictSize)
 {
-	count_word_unique = 0;
 	number_of_words = 0;
 	this->dictSize = dictSize;
 	data = new int[dictSize];
@@ -83,7 +80,6 @@ trainRow::trainRow(int dictSize)
 trainRow::trainRow(const trainRow& TR)
 {
 	number_of_words = TR.number_of_words;
-	count_word_unique = TR.count_word_unique;
 	dictSize = TR.dictSize;
 	data = new int[TR.dictSize];
 	for (int i = 0; i < TR.dictSize; i++)
@@ -145,7 +141,6 @@ void trainCase::get_words(const string &filename)
 		int wordCnt = 0;
 		string words, word;
 		trainRow* TR = new trainRow();
-		vector<string> words_in_this_row;
 
 		istringstream ss(s);
 		getline(ss, words, ',');//获得单词序列
@@ -156,11 +151,6 @@ void trainCase::get_words(const string &filename)
 			if (find(wordsVC.begin(), wordsVC.end(), word) == wordsVC.end())//从未出现过的单词 
 			{
 				wordsVC.push_back(word);//记录到vector里
-			}
-			if (find(words_in_this_row.begin(), words_in_this_row.end(), word) == words_in_this_row.end())
-			{
-				words_in_this_row.push_back(word);
-				TR->count_word_unique++;
 			}
 		}
 		TR->number_of_words = wordCnt;
@@ -228,9 +218,10 @@ class testCase
 {
 public:
 	double* emotion_posibility;//6个感情的预测概率
+	//vector<string> test_words_vc;//所有词
 	string words;//测试文本
-	//int newWords;//出现的词典里没有的新词数,不重复
-	queue<int> words_location;//记录所有词在训练集词典的位置，不存在为-1
+	int newWords;//出现的词典里没有的新词数,不重复
+	queue<int> words_location;
 
 	testCase();
 	testCase(trainCase& TC, string& words, double lp);
@@ -239,7 +230,7 @@ public:
 
 	int test_word_in_trainRow(int location, trainRow* TR, vector<string> &VC);
 	void get_words_location(vector<string> &VC);
-	int newWords_counter(trainRow* TR, vector<string>& VC);//对于读出的一个词，把其放入newWords或oldWords
+	void newWords_counter(vector<string>& VC);//对于读出的一个词考虑是否加到newWords
 	//返回<分子，分母>
 	pair<double, double> row_cal_emotion(vector<string> &VC, trainRow* TR, double lp);
 	friend void operator<< (ostream& os, const testCase& TC);
@@ -250,6 +241,8 @@ testCase::testCase()
 }
 testCase::testCase(const testCase& TC)
 {
+	words = TC.words;
+	newWords = TC.newWords;
 	emotion_posibility = new double[6];
 	for (int i = 0; i < 6; i++)
 	{
@@ -265,9 +258,10 @@ testCase::testCase(trainCase& TC, string& words, double lp)
 	{
 		emotion_posibility[i] = 0;
 	}
-	double nu [630];//对每一行的训练数据算出的分子
-	double de [630];//对每一行的训练数据算出的分母
+	double nu[630];//对每一行的训练数据算出的分子
+	double de[630];//对每一行的训练数据算出的分母
 
+	newWords_counter(TC.wordsVC);
 	pair<double, double> tmp_pair;
 	for (int i = 0; i < TC.rowCnt; i++)
 	{
@@ -316,42 +310,39 @@ void testCase::get_words_location(vector<string> &VC)
 		words_location.push(find_word_in_vc(word, VC));
 	}
 }
-int testCase::newWords_counter(trainRow* TR, vector<string> &VC)
+void testCase::newWords_counter(vector<string> &VC)
 {
-	int newWords = 0;
 	vector<int> newWordsVC;
 	int it_end = words_location.size();
-	for(int it = 0; it < it_end; it++)
+	for (int it = 0; it < it_end; it++)
 	{
-		int tmp_loaction = words_location.front();
-		if (test_word_in_trainRow(tmp_loaction,TR,VC) == 0 && find(newWordsVC.begin(),newWordsVC.end(),tmp_loaction) == newWordsVC.end())
+		int tmp_location = words_location.front();
+		if (tmp_location == -1 && find(newWordsVC.begin(), newWordsVC.end(),tmp_location) == newWordsVC.end())
 		{
-			newWordsVC.push_back(tmp_loaction);
+			newWordsVC.push_back(tmp_location);
 			newWords++;
 		}
 		words_location.pop();
-		words_location.push(tmp_loaction);
+		words_location.push(tmp_location);
 	}
-	return newWords;
 }
 pair<double, double> testCase::row_cal_emotion(vector<string> &VC, trainRow* TR, double lp)
 {
 	double tmp_de = 1;//分母
 	double tmp_nu = 1;//分子
-	//int count_newWords_unique = newWords_counter(TR, VC);
 
-	//分母每次乘上去的值=测试文本对于当前训练文本不重复新词个数*lp+训练文本词的不重复个数*lp+训练文本词总数
-	double tmp_de_factor = (newWords_counter(TR,VC) + TR->count_word_unique) * lp + TR->number_of_words;
+	//分母每次乘上去的值=测试文本对于训练集不重复新词个数*lp+训练集的不重复个数*lp+训练文本词总数
+	double tmp_de_factor = (newWords + VC.size()) * lp + TR->number_of_words;
 	int it_end = words_location.size();
-	for(int it = 0; it < it_end; it++)
+	for (int it = 0; it < it_end; it++)
 	{
 		int tmp_location = words_location.front();
-		tmp_nu *= test_word_in_trainRow(tmp_location, TR, VC) + lp;//词出现的次数+lp
+		tmp_nu *= test_word_in_trainRow(tmp_location, TR, VC) + lp;//词出现的词数+lp
 		tmp_de *= tmp_de_factor;
 		words_location.pop();
 		words_location.push(tmp_location);
 	}
-	
+
 	pair<double, double> res(tmp_nu, tmp_de);
 	return res;
 }
@@ -374,6 +365,7 @@ void validHandle(ostream &os, string &valid_file_name, trainCase &TC, double lp)
 		string words;
 		istringstream iss(s);
 		getline(iss, words, ',');
+		iss.clear();
 		testCase testcase(TC, words, lp);
 		os << testcase;
 	}
@@ -401,8 +393,9 @@ int main()
 	string test_file_name = "test_set.csv";
 	string validres_file_name = "";
 	string testres_file_name = "test_res.txt";
-	double lp = 1;
+	double lp = 0.031;
 	int loglp = 0;
+	int norm_type = 0;
 
 	trainCase traincase(train_file_name);
 
@@ -422,14 +415,14 @@ int main()
 		ofstream f_valid_out(validres_file_name);
 
 		validHandle(f_valid_out, valid_file_name, traincase, lp);
-		cout << "lp = " << lp << " is completed!" << endl;
-		lp = lp / 10;
+		cout << i << ':' << "lp = " << lp << " is completed!" << endl;
+		lp = lp + 0.0001;
 	}
 
 	//ofstream f_test_out(testres_file_name);
-	//testHandle(f_test_out, valid_file_name, traincase, lp);
+	//testHandle(f_test_out, valid_file_name, traincase, lp, norm_type);
 
 	system("pause");
-    return 0;
+	return 0;
 }
 
