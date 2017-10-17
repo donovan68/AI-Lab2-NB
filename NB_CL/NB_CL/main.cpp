@@ -23,11 +23,11 @@ using namespace std;
 #define JOY 3
 #define SAD 4
 #define SURPRISE 5
-const string EMOTION[] = { "anger","disgust","fear","joy","sad", "surprise"};
+const string EMOTION[] = { "anger","disgust","fear","joy","sad", "surprise" };
 int emotion_to_index(const string& emotion)
 {
 	if (emotion == "anger") { return 0; }
-	else if(emotion == "disgust") { return 1; }
+	else if (emotion == "disgust") { return 1; }
 	else if (emotion == "fear") { return 2; }
 	else if (emotion == "joy") { return 3; }
 	else if (emotion == "sad") { return 4; }
@@ -152,6 +152,7 @@ public:
 	int dictSize;			//不重复记录单词数，矩阵的列数 
 	int rowCnt;				//一共多少训练用的文章，矩阵的行数
 	int* emotion_row_count;	//每个感情在训练集里出现的次数,是一个有6个值的数组
+	int* emotion_word_count_unique;//每个感情中不重复的单词数
 	int* emotion_word_count;
 	vector<string> wordsVC;	//不重复记录单词 
 	vector<trainRow*> matrix;//onehot矩阵 TF矩阵 感情向量
@@ -169,10 +170,12 @@ trainCase::trainCase()
 {
 	dictSize = rowCnt = 0;
 	emotion_row_count = new int[6];
+	emotion_word_count_unique = new int[6];
 	emotion_word_count = new int[6];
 	for (int i = 0; i < 6; i++)
 	{
 		emotion_row_count[i] = 0;
+		emotion_word_count_unique[i] = 0;
 		emotion_word_count[i] = 0;
 	}
 }
@@ -180,10 +183,12 @@ trainCase::trainCase(const string &filename)
 {
 	dictSize = rowCnt = 0;
 	emotion_row_count = new int[6];
+	emotion_word_count_unique = new int[6];
 	emotion_word_count = new int[6];
 	for (int i = 0; i < 6; i++)
 	{
 		emotion_row_count[i] = 0;
+		emotion_word_count_unique[i] = 0;
 		emotion_word_count[i] = 0;
 	}
 	get_words(filename);//Initialize dictSize/rowCnt/wordsVC
@@ -196,6 +201,7 @@ trainCase::~trainCase()
 		delete matrix[i];
 	}
 	delete[] emotion_row_count;
+	delete[] emotion_word_count_unique;
 	delete[] emotion_word_count;
 }
 void trainCase::get_words(const string &filename)
@@ -204,6 +210,7 @@ void trainCase::get_words(const string &filename)
 	ifstream fin(filename.c_str());
 	string s;
 	getline(fin, s);//去掉说明 
+	vector<string> wordsVC_emotion[6];//不重复记录一个感情的单词
 	while (getline(fin, s))
 	{
 		int wordCnt = 0;
@@ -225,6 +232,11 @@ void trainCase::get_words(const string &filename)
 			{
 				wordsVC.push_back(word);//记录到vector里
 			}
+
+			if (find(wordsVC_emotion[currEmotion].begin(), wordsVC_emotion[currEmotion].end(), word) == wordsVC_emotion[currEmotion].end())
+			{
+				wordsVC_emotion[currEmotion].push_back(word);
+			}
 		}
 		TR->number_of_words = wordCnt;
 		matrix.push_back(TR);
@@ -234,6 +246,10 @@ void trainCase::get_words(const string &filename)
 	}
 	dictSize = wordsVC.size();
 	rowCnt = matrix.size();
+	for (int i = 0; i < 6; i++)
+	{
+		emotion_word_count_unique[i] = wordsVC_emotion[i].size();
+	}
 }
 void trainCase::write_matrix(const string &filename)
 {
@@ -245,7 +261,6 @@ void trainCase::write_matrix(const string &filename)
 	getline(fin, s);//去掉说明 
 	while (getline(fin, s))
 	{
-		//初始化训练数据一行
 		matrix[currRow]->dictSize = dictSize;
 		matrix[currRow]->data = new int[dictSize];
 		for (int i = 0; i < dictSize; i++)
@@ -267,7 +282,7 @@ void trainCase::write_matrix(const string &filename)
 				matrix[currRow]->data[location] += 1;
 			}
 		}
-		
+
 
 		currRow++;
 	}
@@ -332,6 +347,11 @@ void operator<<(ostream& os, const trainCase& TC)
 	os << endl;
 	for (int i = 0; i < 6; i++)
 	{
+		os << TC.emotion_word_count_unique[i] << '\t';
+	}
+	os << endl;
+	for (int i = 0; i < 6; i++)
+	{
 		os << TC.emotion_word_count[i] << '\t';
 	}
 	os << endl;
@@ -341,21 +361,19 @@ class testCase
 {
 public:
 	double* emotion_posibility;
-	int newWords;
 
 	testCase();
 	testCase(const string &words, trainCase &TC, int model, double lp);//0 for bernoulli, 1 for multinomial
 	testCase(const testCase& TC);
 	~testCase();
-	void get_newWords(const string &words, vector<string> &VC);
 	void score_normalize(double* x);
 	void sacling_normalize(double* x);
 	int classify();
 	void print();
 };
+
 testCase::testCase()
 {
-	newWords = 0;
 	emotion_posibility = new double[6];
 	for (int i = 0; i < 6; i++)
 	{
@@ -364,17 +382,14 @@ testCase::testCase()
 }
 testCase::testCase(const testCase& TC)
 {
-	newWords = TC.newWords;
 	emotion_posibility = new double[6];
 	for (int i = 0; i < 6; i++)
 	{
 		emotion_posibility[i] = TC.emotion_posibility[i];
 	}
 }
-testCase::testCase(const string &words, trainCase &TC, int model, double lp)
+testCase::testCase(const string &words, trainCase &TC, int model,double lp)
 {
-	//testCase本身的初始化
-	newWords = 0;
 	emotion_posibility = new double[6];
 	double emotion_posibility_de[6];//分母
 	double emotion_posibility_nu[6];//分子
@@ -384,7 +399,6 @@ testCase::testCase(const string &words, trainCase &TC, int model, double lp)
 		emotion_posibility_de[i] = 1;
 		emotion_posibility_nu[i] = 1;
 	}
-	get_newWords(words, TC.wordsVC);
 
 	string word;
 	istringstream iss(words);
@@ -395,14 +409,14 @@ testCase::testCase(const string &words, trainCase &TC, int model, double lp)
 			if (model == 0)//伯努利模型
 			{
 				int cnt = TC.count_Bern(word, i);
-				emotion_posibility_nu[i] *= cnt + lp;
+				emotion_posibility_nu[i] *= cnt + 1.0;
 				emotion_posibility_de[i] *= TC.emotion_row_count[i] + 2.0*lp;
 			}
 			else //词袋模型
 			{
 				int cnt = TC.count_multi(word, i);
-				emotion_posibility_nu[i] *= cnt + lp;
-				emotion_posibility_de[i] *= (newWords + TC.wordsVC.size())*lp + TC.emotion_word_count[i];
+				emotion_posibility_nu[i] *= cnt + 1.0*lp;
+				emotion_posibility_de[i] *= TC.emotion_word_count_unique[i]*lp + TC.emotion_word_count[i];
 			}
 		}
 	}
@@ -419,20 +433,6 @@ testCase::testCase(const string &words, trainCase &TC, int model, double lp)
 testCase::~testCase()
 {
 	delete[] emotion_posibility;
-}
-void testCase::get_newWords(const string &words, vector<string> &VC)
-{
-	vector<string> new_wordsVC;
-	string word;
-	istringstream iss(words);
-	while (iss >> word)
-	{
-		if (find_word_in_vc(word, VC) == -1 && find_word_in_vc(word, new_wordsVC) == -1)
-		{
-			newWords++;
-			new_wordsVC.push_back(word);
-		}
-	}
 }
 void testCase::score_normalize(double* x)
 {
@@ -500,7 +500,8 @@ double validHandle(string &valid_file_name, trainCase &TC, int model, double lp)
 			right_cnt++;
 		}
 		all_cnt++;
-		
+
+		//cout << emotion_pre << endl;
 		//testcase.print();
 		//system("pause");
 		cout << emotion_pre << endl;
@@ -522,7 +523,7 @@ void testHandle(ostream &os, string &test_file_name, trainCase &TC, int model, d
 
 		testCase testcase(words, TC, model, lp);
 		emotion_pre = EMOTION[testcase.classify()];
-		
+
 		//cout << emotion_pre << endl;
 		testcase.print();
 		//system("pause");
@@ -534,20 +535,19 @@ int main()
 	string train_file_name = "train_set.csv";
 	string valid_file_name = "validation_set.csv";
 	string test_file_name = "test_set_try.csv";
-	
+
 	trainCase traincase(train_file_name);
 
 	ofstream try_fout("try_train_matrix.txt");//debug
 	try_fout << traincase;//debug
 
 	int model = 1;
-	double lp = 1;
+	double lp = 0.0005;
 	double correction = validHandle(valid_file_name, traincase, model, lp);
 	cout << correction << endl;
 
 	//testHandle(cout, test_file_name, traincase, model);
 
 	system("pause");
-    return 0;
+	return 0;
 }
-
