@@ -451,12 +451,12 @@ testCase::testCase(const string &words, trainCase &TC, int model, double lp)
 	//	//cout << emotion_posibility_nu[i] << ' ' << emotion_posibility_de[i] << endl;
 	//	cout << emotion_posibility_nu[i] / emotion_posibility_de[i] << endl;
 	//}
-	vector_normalize(emotion_posibility_nu);
-	vector_normalize(emotion_posibility_de);
+	score_normalize(emotion_posibility_nu);
+	score_normalize(emotion_posibility_de);
 	//for (int i = 0; i < 6; i++)
 	//{
-	//	cout << emotion_posibility_nu[i] << '\n' << emotion_posibility_de[i] << '\n';
-	//	//cout << emotion_posibility_nu[i] / emotion_posibility_de[i] << endl;
+	//	//cout << emotion_posibility_nu[i] << '\n' << emotion_posibility_de[i] << '\n';
+	//	cout << emotion_posibility_nu[i] / emotion_posibility_de[i] << endl;
 	//}
 	for (int i = 0; i < 6; i++)
 	{
@@ -470,8 +470,14 @@ testCase::testCase(const string &words, trainCase &TC, int model, double lp)
 	//}
 	//score_normalize(emotion_posibility);
 	////normalize_6(emotion_posibility);
+	////for (int i = 0; i < 6; i++)
+	////{
+	////	cout << emotion_posibility[i] << ' ';
+	////}
+	////cout << endl;
 	//for (int i = 0; i < 6; i++)
 	//{
+	//	//cout << 1.0*TC.emotion_row_count[i] / TC.rowCnt << ' ';
 	//	emotion_posibility[i] *= 1.0*TC.emotion_row_count[i]/ TC.rowCnt;		
 	//}
 }
@@ -520,7 +526,7 @@ void testCase::score_normalize(double* x)
 
 	for (int i = 0; i < 6; i++)
 	{
-		x[i] = (x[i] - m) / sqrt(v);
+		x[i] = (x[i] - m) / sqrt(v)+0.8;
 	}
 }
 void testCase::sacling_normalize(double* x)
@@ -625,7 +631,8 @@ int main()
 	string test_file_name = "test_set_try.csv";
 
 	trainCase traincase(train_file_name);
-
+	//ofstream try_fout("try_train_matrix.txt");//debug
+	//try_fout << traincase;//debug
 	//system("pause");
 
 	int model = 1;
