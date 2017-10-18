@@ -57,6 +57,15 @@ void normalize_6(double* x)
 		x[i] = x[i] / sum;
 	}
 }
+double square_sum(double* data, int size)
+{
+	double res = 0;
+	for (int i = 0; i < size; i++)
+	{
+		res += pow(data[i], 2);
+	}
+	return res/size;
+}
 double mean(double* data, int size)
 {
 	double res = 0;
@@ -369,6 +378,7 @@ public:
 	testCase(const testCase& TC);
 	~testCase();
 	void get_newWords_emotion(const string& words, vector<string>* VC_emotion);
+	void testCase::vector_normalize(double* x);
 	void score_normalize(double* x);
 	void sacling_normalize(double* x);
 	int classify();
@@ -381,6 +391,7 @@ testCase::testCase()
 	for (int i = 0; i < 6; i++)
 	{
 		emotion_posibility[i] = 1;
+		newWords_emotion[i] = 1;
 	}
 }
 testCase::testCase(const testCase& TC)
@@ -390,6 +401,7 @@ testCase::testCase(const testCase& TC)
 	for (int i = 0; i < 6; i++)
 	{
 		emotion_posibility[i] = TC.emotion_posibility[i];
+		newWords_emotion[i] = TC.newWords_emotion[i];
 	}
 }
 testCase::testCase(const string &words, trainCase &TC, int model, double lp)
@@ -439,12 +451,12 @@ testCase::testCase(const string &words, trainCase &TC, int model, double lp)
 	//	//cout << emotion_posibility_nu[i] << ' ' << emotion_posibility_de[i] << endl;
 	//	cout << emotion_posibility_nu[i] / emotion_posibility_de[i] << endl;
 	//}
-	score_normalize(emotion_posibility_nu);
-	score_normalize(emotion_posibility_de);
+	vector_normalize(emotion_posibility_nu);
+	vector_normalize(emotion_posibility_de);
 	//for (int i = 0; i < 6; i++)
 	//{
-	//	//cout << emotion_posibility_nu[i] << ' ' << emotion_posibility_de[i] << endl;
-	//	cout << emotion_posibility_nu[i] / emotion_posibility_de[i] << endl;
+	//	cout << emotion_posibility_nu[i] << '\n' << emotion_posibility_de[i] << '\n';
+	//	//cout << emotion_posibility_nu[i] / emotion_posibility_de[i] << endl;
 	//}
 	for (int i = 0; i < 6; i++)
 	{
@@ -490,6 +502,16 @@ void testCase::get_newWords_emotion(const string& words, vector<string>* VC_emot
 	}
 	
 }
+void testCase::vector_normalize(double* x)
+{
+	//standard score
+	double s = square_sum(x, 6);
+
+	for (int i = 0; i < 6; i++)
+	{
+		x[i] = (x[i]) / sqrt(s)+0.6;
+	}
+}
 void testCase::score_normalize(double* x)
 {
 	//standard score
@@ -498,7 +520,7 @@ void testCase::score_normalize(double* x)
 
 	for (int i = 0; i < 6; i++)
 	{
-		x[i] = (x[i] - m) / sqrt(v) + 1;
+		x[i] = (x[i] - m) / sqrt(v);
 	}
 }
 void testCase::sacling_normalize(double* x)
@@ -532,11 +554,11 @@ void testCase::print()
 		cout << emotion_posibility[i] << ' ';
 	}
 	cout << endl;
-	for (int i = 0; i < 6; i++)
-	{
-		cout << newWords_emotion[i] << ' ';
-	}
-	cout << endl;
+	//for (int i = 0; i < 6; i++)
+	//{
+	//	cout << newWords_emotion[i] << ' ';
+	//}
+	//cout << endl;
 }
 
 double validHandle(string &valid_file_name, trainCase &TC, int model, double lp)
